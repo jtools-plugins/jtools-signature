@@ -57,7 +57,7 @@ class PluginImpl : IPlugin {
 
     override fun pluginDesc(): String = "计算内容或者文件的md5,sha1,sha256等签名值"
 
-    override fun pluginVersion(): String = "0.0.1"
+    override fun pluginVersion(): String = "0.0.2"
 
     override fun createPanel(project: Project): JComponent = JBSplitter(true).apply {
         this.dividerWidth = 2
