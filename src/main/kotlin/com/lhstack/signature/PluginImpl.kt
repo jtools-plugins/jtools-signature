@@ -119,6 +119,7 @@ class PluginImpl : IPlugin {
                                     input.text = it[0].name
                                     input.putUserData(dataType, 1)
                                     input.putUserData(dataValue, it[0].toNioPath())
+                                    checksum(project)
                                 }
                             }
                     }
@@ -129,32 +130,41 @@ class PluginImpl : IPlugin {
                 }
             }, object : AnAction({ "checksum" }, AllIcons.Actions.Execute) {
                 override fun actionPerformed(e: AnActionEvent) {
-                    OUTPUT_CACHE[project.locationHash]?.let { output ->
-                        INPUT_CACHE[project.locationHash]?.let { input ->
-                            val type = input.getUserData(dataType) ?: 0
-                            val bytes = when (type) {
-                                0 -> input.text.toByteArray(Charsets.UTF_8)
-                                else -> {
-                                    input.getUserData(dataValue)?.readBytes()
-                                }
-                            }
-                            if (bytes?.isEmpty() == true) {
-                                output.text = "请输入或者选择需要签名的对象"
-                                return
-                            }
-                            output.text = """
+                    checksum(project)
+                }
+
+                override fun getActionUpdateThread(): ActionUpdateThread {
+                    return ActionUpdateThread.EDT
+                }
+            })
+
+    fun checksum(project: Project){
+        OUTPUT_CACHE[project.locationHash]?.let { output ->
+            INPUT_CACHE[project.locationHash]?.let { input ->
+                val type = input.getUserData(dataType) ?: 0
+                val bytes = when (type) {
+                    0 -> input.text.toByteArray(Charsets.UTF_8)
+                    else -> {
+                        input.getUserData(dataValue)?.readBytes()
+                    }
+                }
+                if (bytes?.isEmpty() == true) {
+                    output.text = "请输入或者选择需要签名的对象"
+                    return
+                }
+                output.text = """
                                     CRC32=${
-                                CRC32().let {
-                                    it.update(bytes)
-                                    it.value
-                                }
-                            }
+                    CRC32().let {
+                        it.update(bytes)
+                        it.value
+                    }
+                }
                                     CRC32C=${
-                                CRC32C().let {
-                                    it.update(bytes)
-                                    it.value
-                                }
-                            }
+                    CRC32C().let {
+                        it.update(bytes)
+                        it.value
+                    }
+                }
                                     md2=${DigestUtils.md2Hex(bytes)}
                                     md5=${DigestUtils.md5Hex(bytes)}
                                     sha1=${DigestUtils.sha1Hex(bytes)}
@@ -168,15 +178,10 @@ class PluginImpl : IPlugin {
                                     sha512_224=${DigestUtils.sha512_224Hex(bytes)}
                                     sha512_256=${DigestUtils.sha512_256Hex(bytes)}
                                 """.trimIndent()
-                        }
+            }
 
-                    }
-                }
-
-                override fun getActionUpdateThread(): ActionUpdateThread {
-                    return ActionUpdateThread.EDT
-                }
-            })
+        }
+    }
 
     override fun support(jToolsVersion: Int): Boolean {
         return super.support(jToolsVersion)
