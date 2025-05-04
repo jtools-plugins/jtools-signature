@@ -13,11 +13,13 @@ import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.editor.ex.EditorEx
+import com.intellij.openapi.editor.impl.EditorImpl
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.fileChooser.FileChooserFactory
 import com.intellij.openapi.fileTypes.LanguageFileType
 import com.intellij.openapi.fileTypes.PlainTextFileType
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.getUserData
 import com.intellij.openapi.ui.putUserData
 import com.intellij.openapi.util.Disposer
@@ -25,6 +27,7 @@ import com.intellij.openapi.util.Key
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.ui.JBSplitter
 import com.intellij.ui.LanguageTextField
+import com.intellij.util.lang.JavaVersion
 import com.lhstack.tools.plugins.Helper
 import com.lhstack.tools.plugins.IPlugin
 import org.apache.commons.codec.digest.DigestUtils
@@ -46,7 +49,9 @@ class PluginImpl : IPlugin {
 
         val OUTPUT_CACHE = mutableMapOf<String, LanguageTextField>()
 
-        val DISPOSER = mutableMapOf<String, Disposable>()
+        val DISPOSER = mutableMapOf<String,Disposable>()
+
+        val COMPONENT_CACHE = mutableMapOf<String, JComponent>()
     }
 
     override fun pluginIcon(): Icon? = Helper.findIcon("plugin.svg", PluginImpl::class.java)
@@ -59,31 +64,34 @@ class PluginImpl : IPlugin {
 
     override fun pluginVersion(): String = "0.0.2"
 
-    override fun createPanel(project: Project): JComponent = JBSplitter(true).apply {
-        this.dividerWidth = 2
-        this.proportion = 0.5f
-        val parentDisposable = Disposer.newDisposable()
-        this.firstComponent =
-            INPUT_CACHE.computeIfAbsent(project.locationHash) { createTextField(project, parentDisposable = parentDisposable) }.apply {
-                val that = this
-                this.addDocumentListener(object : DocumentListener {
-                    override fun documentChanged(event: DocumentEvent) {
-                        //文本
-                        that.putUserData(dataType, 0)
-                        checksum(project)
-                    }
-                })
-            }
-        this.secondComponent =
-            OUTPUT_CACHE.computeIfAbsent(project.locationHash) { createTextField(project,
-                PropertiesFileType.INSTANCE, parentDisposable = parentDisposable) }
-        DISPOSER[project.locationHash] = parentDisposable
+    override fun createPanel(project: Project): JComponent = COMPONENT_CACHE.computeIfAbsent(project.locationHash) {
+        JBSplitter(true).apply {
+            this.dividerWidth = 2
+            this.proportion = 0.5f
+            val parentDisposable = Disposer.newDisposable()
+            this.firstComponent =
+                INPUT_CACHE.computeIfAbsent(project.locationHash) { createTextField(project, parentDisposable = parentDisposable) }.apply {
+                    val that = this
+                    this.addDocumentListener(object : DocumentListener {
+                        override fun documentChanged(event: DocumentEvent) {
+                            //文本
+                            that.putUserData(dataType, 0)
+                            checksum(project)
+                        }
+                    })
+                }
+            this.secondComponent =
+                OUTPUT_CACHE.computeIfAbsent(project.locationHash) { createTextField(project,
+                    PropertiesFileType.INSTANCE, parentDisposable = parentDisposable) }
+            DISPOSER[project.locationHash] = parentDisposable
+        }
     }
 
     override fun closeProject(project: Project) {
         DISPOSER.remove(project.locationHash)?.let {
             Disposer.dispose(it)
         }
+        COMPONENT_CACHE.remove(project.locationHash)
         INPUT_CACHE.remove(project.locationHash)
         OUTPUT_CACHE.remove(project.locationHash)
     }
@@ -185,7 +193,7 @@ class PluginImpl : IPlugin {
     }
 
     override fun support(jToolsVersion: Int): Boolean {
-        return super.support(jToolsVersion)
+        return JavaVersion.current().feature >= 17
     }
 
     private fun createTextField(project: Project,fileType:LanguageFileType = PlainTextFileType.INSTANCE, parentDisposable: Disposable): LanguageTextField =
@@ -218,7 +226,14 @@ class PluginImpl : IPlugin {
                 settings.isLineMarkerAreaShown = false
                 settings.setRightMargin(-1)
                 Disposer.register(parentDisposable) {
-                    EditorFactory.getInstance().releaseEditor(editorEx)
+                    if(editorEx is EditorImpl){
+                        if(!editorEx.isDisposed){
+                            EditorFactory.getInstance().releaseEditor(editorEx)
+                        }
+                    }else {
+                        EditorFactory.getInstance().releaseEditor(editorEx)
+                    }
+
                 }
                 return editorEx
             }
