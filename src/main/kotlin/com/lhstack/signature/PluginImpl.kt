@@ -70,6 +70,7 @@ class PluginImpl : IPlugin {
                     override fun documentChanged(event: DocumentEvent) {
                         //文本
                         that.putUserData(dataType, 0)
+                        checksum(project)
                     }
                 })
             }
